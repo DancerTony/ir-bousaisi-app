@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>防災士試験対策：極限訓練所</title>
+    <style>
+        :root {
+            --army-dark: #2d3436;
+            --camo-green: #4b5320;
+            --camo-olive: #708238;
+            --camo-tan: #a68b6a;
+            --action-orange: #d35400;
+            --white: #ecf0f1;
+        }
+
+        body {
+            background-color: var(--army-dark);
+            background-image: linear-gradient(45deg, #2d3436 25%, #34495e 25%, #34495e 50%, #2d3436 50%, #2d3436 75%, #34495e 75%, #34495e 100%);
+            background-size: 100px 100px;
+            color: var(--white);
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        #app {
+            background: rgba(45, 52, 54, 0.95);
+            width: 90%;
+            max-width: 600px;
+            padding: 30px;
+            border: 4px solid var(--camo-green);
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            position: relative;
+        }
+
+        h1 {
+            color: var(--camo-olive);
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border-bottom: 2px solid var(--camo-green);
+            padding-bottom: 10px;
+        }
+
+        .btn {
+            background: var(--camo-olive);
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            width: 100%;
+            margin: 10px 0;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1.1em;
+            transition: 0.3s;
+            text-align: left;
+        }
+
+        .btn:hover {
+            background: var(--action-orange);
+            transform: scale(1.02);
+        }
+
+        .info-panel {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 5px solid var(--action-orange);
+        }
+
+        #feedback-area {
+            display: none;
+            margin-top: 20px;
+        }
+
+        .correct { color: #2ecc71; font-weight: bold; }
+        .wrong { color: #e74c3c; font-weight: bold; }
+        
+        .progress-bar {
+            height: 10px;
+            background: #444;
+            margin-bottom: 20px;
+        }
+        #progress-inner {
+            height: 100%;
+            background: var(--camo-olive);
+            width: 0%;
+            transition: 0.5s;
+        }
+
+        .result-msg { line-height: 1.6; font-size: 1.1em; }
+    </style>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#2d3436">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+</head>
+<body>
+
+<div id="app">
+    <h1>防災士試験：極限訓練所</h1>
+    <div id="game-container">
+        <div class="progress-bar"><div id="progress-inner"></div></div>
+        <div id="question-area">
+            <p id="question-text" style="font-size: 1.2em;"></p>
+            <div id="options-area"></div>
+        </div>
+        <div id="feedback-area">
+            <div id="feedback-result"></div>
+            <div class="info-panel" id="explanation-text"></div>
+            <button class="btn" onclick="nextQuestion()">了解、次へ進む</button>
+        </div>
+    </div>
+    <div id="result-screen" style="display:none;">
+        <h2 id="final-score"></h2>
+        <div id="final-advice" class="result-msg"></div>
+        <button class="btn" onclick="location.reload()">再訓練を開始する</button>
+    </div>
+</div>
+
+<script>
+// 問題データバンク（20問をランダムにシャッフルして提供）
+const database = [
+    { q: "自助・共助・公助のうち、公助が占める割合は災害時どれくらいとされる？", a: ["約1割", "約3割", "約5割", "約7割"], c: 0, e: "大規模災害時、公的機関の救助には限界があります。自助・共助が約9割を占めると言われています。" },
+    { q: "避難所でのプライバシー確保に最も有効なのは？", a: ["段ボールパーテーション", "厚手のカーテン", "新聞紙", "特になし"], c: 0, e: "段ボールパーテーションは断熱効果もあり、避難所環境の改善に推奨されます。" },
+    { q: "家具の固定で、L字金具を付ける最適な場所は？", a: ["家具の下側", "壁の石膏ボード部分", "壁の桟（さん）がある場所", "どこでも良い"], c: 2, e: "下地（桟）がない場所に固定しても、揺れで抜けてしまうため効果が薄いです。" },
+    { q: "非常持ち出し袋の重量目安（成人男性）は？", a: ["5kg以内", "15kg以内", "30kg以内", "制限なし"], c: 1, e: "一般的に男性15kg、女性10kgが、避難時に支障をきたさない目安とされています。" },
+    { q: "トリアージ・タグで、最優先治療群（重症）を示す色は？", a: ["緑", "黄色", "赤", "黒"], c: 2, e: "赤は緊急治療が必要な「最優先治療群」を指します。" },
+    { q: "感震ブレーカーの主な役割は？", a: ["停電を防ぐ", "通電火災を防ぐ", "節電する", "落雷から守る"], c: 1, e: "地震後の電気復旧時に発生する「通電火災」を防ぐための装置です。" },
+    { q: "ハザードマップを確認する際、最も重要なことは？", a: ["避難所の位置のみ見る", "浸水深や土砂災害警戒区域を見る", "自宅の色だけ見る", "配布された日付を見る"], c: 1, e: "リスクの「種類」と「程度」を具体的に把握することが生死を分けます。" },
+    { q: "災害用伝言ダイヤルの番号は？", a: ["119", "110", "171", "117"], c: 2, e: "「忘れない（171）イナイイナイ」と覚えましょう。" },
+    { q: "液状化現象が発生しやすい地盤は？", a: ["岩盤", "砂質の地盤", "粘土質の地盤", "山地"], c: 1, e: "地下水位が高く、砂が堆積した地盤で発生しやすい現象です。" },
+    { q: "ローリングストック法とは？", a: ["同じものをずっと保存する", "古いものから使い買い足す", "非常食は食べない", "まとめて10年分買う"], c: 1, e: "日常的に消費し、備蓄を常に新鮮に保つ方法です。" },
+    { q: "長周期地震動の影響を受けやすいのは？", a: ["木造平屋", "高層ビル", "地下室", "古いトンネル"], c: 1, e: "高層ビルは長周期地震動と共振し、大きく長く揺れる特徴があります。" },
+    { q: "土砂災害の前兆として誤っているものは？", a: ["川が濁り始める", "井戸水が止まる", "小石が落ちてくる", "虹が出る"], c: 3, e: "虹は土砂災害の直接的な前兆ではありません。川の異変や山鳴りに注意が必要です。" },
+    { q: "避難準備・高齢者等避難が発令されたら？", a: ["まだ避難しない", "高齢者等は避難を開始する", "全員強制避難", "様子を見る"], c: 1, e: "警戒レベル3。避難に時間のかかる方はこの段階で避難を開始します。" },
+    { q: "火災時、煙の中を移動する際の基本は？", a: ["直立して走る", "姿勢を低くして移動する", "窓を全部閉める", "立ち止まる"], c: 1, e: "煙は上部に溜まるため、床に近い空気を吸いながら移動します。" },
+    { q: "災害時のトイレ対策で最も必要な備蓄品は？", a: ["芳香剤", "凝固剤付き携帯トイレ", "バケツ", "新聞紙"], c: 1, e: "断水時は水洗トイレが使えません。衛生管理のため携帯トイレの備蓄は必須です。" },
+    { q: "初期消火が可能な限界は？", a: ["天井に火が届くまで", "煙が出なくなるまで", "自分が怖いと思うまで", "火が消えるまで"], c: 0, e: "火が天井に燃え移ったら、初期消火を諦めて即座に避難してください。" },
+    { q: "避難所でのエコノミークラス症候群予防に有効なのは？", a: ["ずっと寝ている", "水分補給と足の運動", "食事を抜く", "厚着をする"], c: 1, e: "狭い場所での不動状態を避け、適度な運動と水分摂取が重要です。" },
+    { q: "活断層の真上付近で起こる揺れの特徴は？", a: ["横揺れのみ", "縦揺れを含む激しい揺れ", "ゆっくりした揺れ", "揺れない"], c: 1, e: "直下型地震となり、突き上げるような激しい揺れに見舞われます。" },
+    { q: "安否確認「J-anpi」で検索できるのは？", a: ["電話番号のみ", "氏名や電話番号", "住所のみ", "SNSのID"], c: 1, e: "通信各社や報道機関の情報を横断的に検索できるサービスです。" },
+    { q: "防災士に求められる「社会的使命」とは？", a: ["現場監督", "自助・共助の推進", "自衛隊の指揮", "市長への進言"], c: 1, e: "地域における防災リーダーとして、共助の精神を広めることが最大の使命です。" }
+];
+
+let currentIdx = 0;
+let score = 0;
+let selectedQuestions = [];
+
+function initGame() {
+    // 20問ランダム抽出
+    selectedQuestions = [...database].sort(() => 0.5 - Math.random()).slice(0, 20);
+    showQuestion();
+}
+
+function showQuestion() {
+    const q = selectedQuestions[currentIdx];
+    document.getElementById('progress-inner').style.width = (currentIdx / 20 * 100) + "%";
+    document.getElementById('question-text').innerText = `【第${currentIdx+1}問】 ${q.q}`;
+    const optionsArea = document.getElementById('options-area');
+    optionsArea.innerHTML = '';
+    
+    q.a.forEach((option, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.innerText = option;
+        btn.onclick = () => checkAnswer(i);
+        optionsArea.appendChild(btn);
+    });
+
+    document.getElementById('feedback-area').style.display = 'none';
+    document.getElementById('question-area').style.display = 'block';
+}
+
+function checkAnswer(choice) {
+    const q = selectedQuestions[currentIdx];
+    const isCorrect = (choice === q.c);
+    if(isCorrect) score += 5;
+
+    const feedbackResult = document.getElementById('feedback-result');
+    const explanationText = document.getElementById('explanation-text');
+    
+    document.getElementById('question-area').style.display = 'none';
+    document.getElementById('feedback-area').style.display = 'block';
+
+    if(isCorrect) {
+        feedbackResult.innerHTML = '<span class="correct">正解。流石だな。</span>';
+    } else {
+        feedbackResult.innerHTML = '<span class="wrong">不正解だ。現場なら命取りだぞ。</span>';
+    }
+    
+    explanationText.innerHTML = `<strong>【解説】</strong><br>正解は「${q.a[q.c]}」。<br>${q.e}`;
+}
+
+function nextQuestion() {
+    currentIdx++;
+    if(currentIdx < 20) {
+        showQuestion();
+    } else {
+        showResult();
+    }
+}
+
+function showResult() {
+    document.getElementById('game-container').style.display = 'none';
+    document.getElementById('result-screen').style.display = 'block';
+    
+    const scoreDisplay = document.getElementById('final-score');
+    const adviceDisplay = document.getElementById('final-advice');
+    
+    scoreDisplay.innerText = `訓練終了。戦績：${score}点`;
+
+    if(score >= 80) {
+        adviceDisplay.innerHTML = `
+            <p style="color:var(--camo-olive); font-size:1.5em; font-weight:bold;">素晴らしい！君は地域の盾となる資格がある！</p>
+            <p>合格だ。知識は十分身についている。だが現場は常に想定外の連続だ。次は「実践的な図上訓練（DIG）」や「救急救命講習」へ参加し、肉体と判断力をさらに磨け。君のような防災士が日本を救う。</p>
+        `;
+    } else {
+        adviceDisplay.innerHTML = `
+            <p style="color:var(--action-orange); font-size:1.5em; font-weight:bold;">不合格だ。まだ訓練が足りないようだな。</p>
+            <p>【傾向と対策】<br>基礎的な用語や数字の把握に甘さが見られる。防災士教本をもう一度読み込み、特に「共助」と「避難行動」のプロセスを叩き込め。ミスを恐れるな、このシミュレーターで何度でも死線を越えてこい。再訓練を待っている。</p>
+        `;
+    }
+}
+
+initGame();
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(console.error);
+  });
+}
+</script>
+</body>
+</html>
